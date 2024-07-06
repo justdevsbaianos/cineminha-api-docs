@@ -1,0 +1,6 @@
+emit:
+  - '@typespec/openapi3'
+environment-variables:
+  BASE_DIR:
+    default: '{cwd}'
+output-dir: /{env.BASE_DIR}/public/api-docs-output

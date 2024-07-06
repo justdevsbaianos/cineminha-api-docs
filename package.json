@@ -1,0 +1,25 @@
+{
+  "name": "cineminha-api-docs",
+  "type": "module",
+  "version": "0.0.1",
+  "scripts": {
+    "dev": "astro dev",
+    "start": "astro dev",
+    "build": "tsp compile src/data/api-docs && astro check && astro build",
+    "preview": "astro preview",
+    "astro": "astro",
+    "docs:compile": "tsp compile src/data/api-docs"
+  },
+  "dependencies": {
+    "@astrojs/check": "^0.7.0",
+    "@astrojs/vue": "^4.5.0",
+    "@scalar/api-reference": "^1.24.36",
+    "@typespec/compiler": "latest",
+    "@typespec/http": "latest",
+    "@typespec/openapi3": "latest",
+    "@typespec/rest": "latest",
+    "astro": "^4.11.5",
+    "typescript": "^5.5.3",
+    "vue": "^3.4.31"
+  }
+}

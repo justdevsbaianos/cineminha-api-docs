@@ -1,0 +1,12 @@
+---
+import ApiReference from "../components/api-reference.vue";
+import Layout from "../layouts/layout.astro";
+
+const origin = Astro.url.origin
+---
+
+<Layout title="CINEMINHA API DOCS">
+  <ApiReference client:load
+    baseUrl={origin}
+  />
+</Layout>
