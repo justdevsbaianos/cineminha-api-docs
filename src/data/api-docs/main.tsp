@@ -14,30 +14,93 @@ using Wrappers;
 @server("https://api.cineminha.online", "production")
 namespace Cineminha;
 
-model WithId {
+model Entity {
   @visibility("read", "update", "delete")
   id: string;
+
+  @visibility("read")
+  createdAt: unixTimestamp32;
+
+  @visibility("read")
+  updatedAt: unixTimestamp32;
+
+  @visibility("read")
+  deletedAt: unixTimestamp32;
+}
+
+namespace Medias {
+  model Image {
+    ...Entity;
+    url: string;
+  }
+}
+
+@tag("Statistics")
+@route("/statistics")
+namespace Statistics {
+  enum Feature {
+    REGISTER,
+    LOGIN,
+    LOGOUT,
+    RATE,
+    FAVORITE,
+    MATCH,
+    FEEDBACK,
+    FRIEND,
+    PROFILE,
+    MOVIE,
+    PASSWORD,
+    CHANGE_PASSWORD,
+    RESET_PASSWORD,
+  }
+
+  enum InteractionType {
+    CLICK,
+    VIEW,
+    SUBMIT,
+  }
+
+  enum AplicationType {
+    WEB,
+    MOBILE,
+    DESKTOP,
+  }
+
+  model StatisticRegister {
+    ...Entity;
+    userId: string;
+    fingerprintId: string;
+    appPath: string;
+    feature: Feature;
+    interactionType: InteractionType;
+    appType: AplicationType;
+    appVersion: string;
+    moreInfo: string;
+  }
+
+  @post
+  op register(@body data: StatisticRegister): SimpleResponse<string>;
 }
 
 @tag("Movies")
 @route("/movies")
 @useAuth(BearerAuth)
 namespace Movies {
-  model Image {
-    ...WithId;
-    url: string;
-  }
-
   model Movie {
-    ...WithId;
+    ...Entity;
     title: string;
-    description: string;
-    favoriteCount: string;
-    parentalRating: string;
-    year: int32;
+    favoriteCount: int32;
+    voteAverage: int32;
+    forAdults: boolean;
+    releaseDate: string;
     director: string;
+    genres: Genres.Genre[];
+    originalLanguage: string;
+    overview: string;
+    favoritedAt: unixTimestamp32;
     pictures: {
-      poster: Image;
+      poster: Medias.Image;
+      backgdrop: Medias.Image;
     };
   }
 
@@ -67,9 +130,8 @@ namespace Matches {
   }
 
   model Match {
-    ...WithId;
+    ...Entity;
     movieId: string;
-    matchedAt: string;
     actor: Users.UserProfile;
     participants: Users.UserProfile[];
   }
@@ -98,19 +160,13 @@ namespace Feedback {
     OTHER,
   }
 
-  enum ApllicationType {
-    WEB,
-    MOBILE,
-    DESKTOP,
-  }
-
   model Feedback {
-    ...WithId;
+    ...Entity;
     userId: string;
     message: string;
-    createdAt: string;
     type: FeedbackType;
-    application: ApllicationType;
+    appType: Statistics.AplicationType;
+    appVersion: string;
   }
 
   @post
@@ -122,7 +178,7 @@ namespace Feedback {
 @useAuth(BearerAuth)
 namespace Genres {
   model Genre {
-    ...WithId;
+    ...Entity;
     name: string;
   }
 
@@ -135,7 +191,7 @@ namespace Genres {
 @useAuth(BearerAuth)
 namespace Ratings {
   model Rating {
-    ...WithId;
+    ...Entity;
     movieId: string;
     userId: string;
     rating: int32;
@@ -230,7 +286,7 @@ namespace Password {
 @useAuth(BearerAuth)
 namespace Users {
   model UserProfile {
-    ...WithId;
+    ...Entity;
     name: string;
     bio: string;
     avatar: string;
