@@ -25,7 +25,7 @@ model Entity {
   updatedAt: unixTimestamp32;
 
   @visibility("read")
-  deletedAt: unixTimestamp32;
+  deletedAt: unixTimestamp32 | null;
 }
 
 namespace Medias {
@@ -35,51 +35,51 @@ namespace Medias {
   }
 }
 
+@tag("Reports")
+@route("/reports")
+namespace Reports {
+  model ReportRequest {
+    target: Users.User.id;
+    reason: string;
+  }
+
+  model Report {
+    ...Entity;
+
+    @doc("Denunciante")
+    whistleblower: Users.User;
+
+    @doc("Denunciado")
+    target: Users.User;
+
+    @doc("Razão da denúncia")
+    reason: string;
+
+    @doc("Quando foi revisado por um admnistrador")
+    reviewedAt: unixTimestamp32 | null;
+
+    @doc("Nível de severidade. Indo de algo suave a algum crime.")
+    severity: 1 | 2 | 3 | 4 | 5;
+  }
+
+  @doc("Cria denúncia com o usuário logado como denunciante")
+  @post
+  op create(@body request: ReportRequest): SimpleResponse<Report>;
+
+  @doc("Lista as denúncias feitas pelo usuário logado")
+  @get
+  op list(): PaginatedResponse<Report>;
+}
+
 @tag("Statistics")
 @route("/statistics")
 namespace Statistics {
-  enum Feature {
-    REGISTER,
-    LOGIN,
-    LOGOUT,
-    RATE,
-    FAVORITE,
-    MATCH,
-    FEEDBACK,
-    FRIEND,
-    PROFILE,
-    MOVIE,
-    PASSWORD,
-    CHANGE_PASSWORD,
-    RESET_PASSWORD,
-  }
-
-  enum InteractionType {
-    CLICK,
-    VIEW,
-    SUBMIT,
-  }
-
+  @doc("Aplicação cliente responsável pela requisição")
   enum AplicationType {
     WEB,
     MOBILE,
     DESKTOP,
   }
-
-  model StatisticRegister {
-    ...Entity;
-    userId: string;
-    fingerprintId: string;
-    appPath: string;
-    feature: Feature;
-    interactionType: InteractionType;
-    appType: AplicationType;
-    appVersion: string;
-    moreInfo: string;
-  }
-
-  @post
-  op register(@body data: StatisticRegister): SimpleResponse<string>;
 }
 
 @tag("Movies")
@@ -90,6 +90,7 @@ namespace Movies {
     ...Entity;
     title: string;
     favoriteCount: int32;
+    matchesCount: int32;
     voteAverage: int32;
     forAdults: boolean;
     releaseDate: string;
@@ -131,7 +132,7 @@ namespace Matches {
 
   model Match {
     ...Entity;
-    movieId: string;
+    movieId: Movies.Movie.id;
     actor: Users.UserProfile;
     participants: Users.UserProfile[];
   }
@@ -142,11 +143,22 @@ namespace Matches {
   @post
   op create(@body request: MatchRequest): SimpleResponse<Match>;
 
-  @put
-  op update(
-    @path id: string,
-    @body request: MatchRequest,
-  ): SimpleResponse<Match>;
+  @post
+  @route("/many")
+  op createMany(
+    @body request: {
+      ...MatchRequest;
+      quantity: int32;
+    },
+  ): SimpleResponse<Match[]>;
+
+  @patch
+  @route("/approve")
+  op approve(@path id: string): SimpleResponse<Match>;
+
+  @patch
+  @route("/reject")
+  op reject(@path id: string): SimpleResponse<Match>;
 }
 
 @tag("System feedback")
@@ -162,7 +174,7 @@ namespace Feedback {
 
   model Feedback {
     ...Entity;
-    userId: string;
+    userId: Users.User.id;
     message: string;
     type: FeedbackType;
     appType: Statistics.AplicationType;
@@ -192,14 +204,18 @@ namespace Genres {
 namespace Ratings {
   model Rating {
     ...Entity;
-    movieId: string;
-    userId: string;
+    movieId: Movies.Movie.id;
+    userId: Users.User.id;
     rating: int32;
     comment: string | null;
   }
 
   @get
-  op list(@query("movieId") movieId: string): SimpleResponse<Rating[]>;
+  op list(@query("movieId") movieId: Movies.Movie.id): SimpleResponse<Rating[]>;
+
+  @get
+  @route("/user")
+  op listUserReviews(@path userId: Users.User.id): PaginatedResponse<Rating>;
 
   @post
   op add(@body rating: Rating): SimpleResponse<string>;
@@ -215,14 +231,17 @@ namespace Ratings {
 @route("/favorites")
 @useAuth(BearerAuth)
 namespace Favorites {
+  @doc("Lista os filmes favoritos do usuário logado.")
   @get
   op list(): PaginatedResponse<Movies.Movie>;
 
+  @doc("Adiciona um filme na lista de favoritos.")
   @post
-  op add(@path id: string): SimpleResponse<string>;
+  op add(@path id: Movies.Movie.id): SimpleResponse<string>;
 
+  @doc("Remove um filme da lista de favoritos.")
   @delete
-  op remove(@path id: string): SimpleResponse<string>;
+  op remove(@path id: Movies.Movie.id): SimpleResponse<string>;
 }
 
 @tag("Auth")
@@ -233,18 +252,22 @@ namespace Auth {
     password: string;
   }
 
-  model UserRegistration extends UserLogin {
-    name: string;
+  model UserRegistration {
+    ...UserLogin;
+    ...Users.UserProfile;
   }
 
+  @doc("Registra um novo usuário.")
   @post
   @route("/register")
   op register(@body user: UserRegistration): SimpleResponse<string>;
 
+  @doc("Loga o usuário e retorna um token de autenticação.")
   @post
   @route("/login")
   op login(@body user: UserLogin): SimpleResponse<string>;
 
+  @doc("Desloga o usuário logado. Invalidando o token.")
   @post
   @route("/logout")
   @useAuth(BearerAuth)
@@ -269,13 +292,16 @@ namespace Password {
     newPassword: string;
   }
 
+  @doc("Atualiza a senha do usuário logado.")
   @patch
   op update(@bodyRoot data: ChangeRequest): SimpleResponse<string>;
 
+  @doc("Solicita a troca de senha.")
   @post
   @route("/request")
   op requestReset(@bodyRoot data: ResetRequest): SimpleResponse<string>;
 
+  @doc("Confirma a troca de senha.")
   @post
   @route("/reset")
   op confirmReset(@bodyRoot data: ResetData): SimpleResponse<string>;
@@ -287,19 +313,35 @@ namespace Password {
 namespace Users {
   model UserProfile {
     ...Entity;
+
+    @doc("Nome do usuário")
     name: string;
+
+    @doc("Biografia do usuário")
     bio: string;
+
+    @doc("URL da imagem de perfil")
     avatar: string;
-    preferedLanguage: string;
+
+    @doc("Linguagem preferida pelo usuário")
+    preferedLanguage: "pt-BR" | "en-US";
+
+    @doc("Gêneros preferidos pelo usuário")
+    @visibility("read")
+    preferedGenres: Genres[];
   }
 
   model User extends UserProfile {
+    @doc("Email do usuário")
+    @visibility("read")
     email: string;
   }
 
+  @doc("Lista os usuários com base em um filtro.")
   @get
   op list(@query("name") name: string): PaginatedResponse<UserProfile>;
 
+  @doc("Busca um usuário pelo ID.")
   @get
   op get(@path id: string): SimpleResponse<UserProfile>;
 }
@@ -308,9 +350,11 @@ namespace Users {
 @route("/users/me")
 @useAuth(BearerAuth)
 namespace Me {
+  @doc("Busca o perfil o usuário logado com dados a mais.")
   @get
   op get(): SimpleResponse<Users.User>;
 
+  @doc("Atualiza o perfil do usuário logado.")
   @put
   op update(@body profile: Users.UserProfile): SimpleResponse<string>;
 }
@@ -319,12 +363,34 @@ namespace Me {
 @route("/friends")
 @useAuth(BearerAuth)
 namespace Friends {
+  model Friend {
+    ...Users.UserProfile;
+
+    @doc("Contador de términos entre o usuário consultado e o usuário listado.")
+    breackupCount: integer;
+  }
+
+  model FriendRequest {
+    userId: Users.User.id;
+
+    @doc("Um número entre 0 e 1 representando o quando o usuário logado gosta desse usuário. Isso pode ou não afetar o resultado de uma combinação.")
+    loveLevel: float;
+  }
+
+  @doc("Lista os amigos de um usuário.")
   @get
-  op list(): PaginatedResponse<Users.UserProfile>;
+  @route("/of")
+  op friendOf(@path userId: Users.User.id): PaginatedResponse<Friend>;
 
+  @doc("Adiciona um novo amigo.")
   @post
-  op add(@path id: string): SimpleResponse<string>;
+  op add(@body body: FriendRequest): SimpleResponse<string>;
 
+  @doc("Atualiza um amigo.")
+  @put
+  op update(@body body: FriendRequest): SimpleResponse<string>;
+
+  @doc("Remove um amigo. Isso afeta o contador de términos com esse usuário para o usuário logado.")
   @delete
-  op remove(@path id: string): SimpleResponse<string>;
+  op remove(@path friendId: Friend.id): SimpleResponse<string>;
 }
